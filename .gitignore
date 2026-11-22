@@ -1,0 +1,12 @@
+tests/test-guard
+tests/test-parser
+tests/diff-framebuilder
+tests/FrameBuilder-fixed.cpp
+*.o
+*.ko
+*.mod
+*.mod.c
+*.cmd
+.*.cmd
+Module.symvers
+modules.order
