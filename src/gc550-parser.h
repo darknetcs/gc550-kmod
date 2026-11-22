@@ -82,5 +82,10 @@ void gc550_parser_init(struct gc550_parser *p,
 /* Bytes were lost: drop the partial frame and re-sync on the next SAV. */
 void gc550_parser_reset(struct gc550_parser *p);
 void gc550_parser_feed(struct gc550_parser *p, const u8 *buf, size_t len);
+/*
+ * Forget the held buffer without frame_done() (the owner is taking it back,
+ * e.g. on STREAMOFF). The current frame, if any, is dropped.
+ */
+void gc550_parser_release_buffer(struct gc550_parser *p);
 
 #endif /* GC550_PARSER_H */

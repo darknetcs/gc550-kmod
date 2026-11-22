@@ -55,6 +55,14 @@ void gc550_parser_reset(struct gc550_parser *p)
 	p->frame_len = 0;
 }
 
+void gc550_parser_release_buffer(struct gc550_parser *p)
+{
+	p->dst = NULL;
+	p->dst_cap = 0;
+	p->in_frame = false;
+	p->frame_len = 0;
+}
+
 /* Bytes that belong to the current frame, if one is open. */
 static void gc550_video(struct gc550_parser *p, const u8 *data, size_t len)
 {

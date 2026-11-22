@@ -12,7 +12,7 @@ SAN	:= -fsanitize=address,undefined -fno-omit-frame-pointer
 CFLAGS	:= -std=gnu11 -O2 -g -Wall -Wextra -Werror $(SAN) -Iinclude -I$(SRC)
 CXXFLAGS := -std=c++17 -O2 -g -Wall -Wextra $(SAN) -Iinclude -I$(SRC) -I$(LGX_SRC)
 
-TESTS := test-guard test-parser
+TESTS := test-guard test-parser test-signal
 ifneq ($(LGX_SRC),)
 TESTS += diff-framebuilder
 endif
@@ -23,6 +23,9 @@ test-guard: test-guard.c $(SRC)/gc550-guard.c $(SRC)/gc550-bootstrap.c $(SRC)/gc
 	$(CC) $(CFLAGS) -o $@ $^
 
 test-parser: test-parser.c $(SRC)/gc550-parser.c
+	$(CC) $(CFLAGS) -o $@ $^
+
+test-signal: test-signal.c $(SRC)/gc550-signal.c
 	$(CC) $(CFLAGS) -o $@ $^
 
 gc550-parser.o: $(SRC)/gc550-parser.c
@@ -42,9 +45,10 @@ diff-framebuilder: diff-framebuilder.cpp gc550-parser.o FrameBuilder-fixed.cpp
 run: $(TESTS)
 	./test-guard ../tools/recordings/gc550-f150158.txt pre-f150158-head.txt
 	./test-parser
+	./test-signal
 	$(if $(filter diff-framebuilder,$(TESTS)),./diff-framebuilder)
 
 clean:
-	rm -f test-guard test-parser diff-framebuilder FrameBuilder-fixed.cpp *.o
+	rm -f test-guard test-parser test-signal diff-framebuilder FrameBuilder-fixed.cpp *.o
 
 .PHONY: all run clean

@@ -1,7 +1,21 @@
 # gc550 — Linux driver for the AVerMedia Live Gamer Extreme (GC550)
 
 Work in progress. See [DESIGN.md](DESIGN.md) for the design, the safety rules and the
-bring-up plan. **Nothing in this repository is ready to load yet.**
+bring-up plan. **The module builds, but has not been loaded or run on hardware yet.**
+
+## Building
+
+```
+make            # static endpoint check, then gc550.ko for the running kernel
+make test       # userspace unit tests (no hardware)
+make checkpatch # kernel coding style
+```
+
+Building never loads anything. Under Secure Boot the module must be signed before
+`insmod` will accept it; see DESIGN.md, "Secure Boot".
+
+Module parameters: `bootstrap=0` binds to the card and checks its endpoints but sends
+it nothing; `index=` picks the ALSA card index.
 
 ## Layout
 
@@ -11,6 +25,15 @@ bring-up plan. **Nothing in this repository is ready to load yet.**
 | `src/gc550-bootstrap.[ch]` | walking and checking the bootstrap table |
 | `src/gc550-bootstrap-data.c` | the bootstrap table, **generated** by `tools/gen-bootstrap.py` |
 | `src/gc550-parser.[ch]` | capture stream parser (video frames and audio) |
+| `src/gc550-signal.[ch]` | HDMI input status decoding |
+| `src/gc550-core.c` | USB probe/disconnect, module parameters, lifetime |
+| `src/gc550-bridge.c` | the only code that sends to the card; every command goes through the guard |
+| `src/gc550-boot.c` | board-state check, guarded replay, colour-space and picture fixes |
+| `src/gc550-status.c` | once-a-second input status poll |
+| `src/gc550-stream.c` | scatter-gather bulk transfers on IN 0x83, parsed in a work item |
+| `src/gc550-v4l2.c` | `/dev/videoN`: fixed 1920x1080 YUYV, vb2 |
+| `src/gc550-alsa.c` | ALSA capture, 48 kHz S16_LE stereo |
+| `tools/check-ep-cmd.sh` | build-time check that nothing but the bridge can send to the card |
 | `tools/recordings/` | the recorded Windows bootstrap the table is generated from |
 | `tests/` | userspace unit tests; they never touch a device |
 

@@ -10,3 +10,5 @@ tests/FrameBuilder-fixed.cpp
 .*.cmd
 Module.symvers
 modules.order
+tests/test-signal
+.checkpatch-camelcase.*
