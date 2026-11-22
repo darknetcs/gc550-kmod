@@ -186,7 +186,8 @@ static int gc550_querycap(struct file *file, void *priv, struct v4l2_capability 
 	struct gc550_dev *dev = video_drvdata(file);
 
 	strscpy(cap->driver, GC550_DRIVER_NAME, sizeof(cap->driver));
-	strscpy(cap->card, "AVerMedia Live Gamer Extreme GC550", sizeof(cap->card));
+	/* card[] holds 31 characters */
+	strscpy(cap->card, "AVerMedia Live Gamer GC550", sizeof(cap->card));
 	usb_make_path(dev->udev, cap->bus_info, sizeof(cap->bus_info));
 	return 0;
 }
