@@ -6,8 +6,16 @@
 #   make KDIR=...     build against another kernel tree
 #   make test         userspace unit tests (no hardware)
 #   make checkpatch   kernel coding-style check
+#   sudo make dkms-install    install as a DKMS package (rebuilt and signed
+#                             for every kernel, loaded when the card is plugged in)
+#   sudo make dkms-uninstall  remove it again
 
 KDIR ?= /lib/modules/$(shell uname -r)/build
+VERSION := $(shell sed -n 's/^PACKAGE_VERSION="\(.*\)"/\1/p' dkms.conf)
+DKMS_SRC := /usr/src/gc550-$(VERSION)
+# Everything a DKMS build needs, and nothing else.
+DKMS_FILES := dkms.conf Kbuild LICENSE README.md DESIGN.md tools/check-ep-cmd.sh \
+	$(wildcard src/*.c src/*.h)
 
 all: check-ep
 	$(MAKE) -C $(KDIR) M=$(CURDIR) W=1 modules
@@ -21,8 +29,27 @@ test:
 checkpatch:
 	perl $(KDIR)/scripts/checkpatch.pl --no-tree --strict --terse -f src/*.[ch]
 
+# Copies sources only; the build itself runs under DKMS, never in this tree.
+dkms-install:
+	@test "$$(id -u)" = 0 || { echo "run as: sudo make dkms-install"; exit 1; }
+	tools/check-ep-cmd.sh
+	@if dkms status -m gc550 -v $(VERSION) | grep -q .; then \
+		echo "gc550/$(VERSION) is already added; run 'sudo make dkms-uninstall' first"; exit 1; fi
+	rm -rf $(DKMS_SRC)
+	for f in $(DKMS_FILES); do install -D -m 644 $$f $(DKMS_SRC)/$$f; done
+	chmod 755 $(DKMS_SRC)/tools/check-ep-cmd.sh
+	dkms add -m gc550 -v $(VERSION)
+	dkms install -m gc550 -v $(VERSION)
+	@echo "Installed. Unplug and replug the GC550 to load the driver."
+
+dkms-uninstall:
+	@test "$$(id -u)" = 0 || { echo "run as: sudo make dkms-uninstall"; exit 1; }
+	-modprobe -r gc550
+	-dkms remove -m gc550 -v $(VERSION) --all
+	rm -rf $(DKMS_SRC)
+
 clean:
 	$(MAKE) -C $(KDIR) M=$(CURDIR) clean
 	$(MAKE) -C tests clean
 
-.PHONY: all check-ep test checkpatch clean
+.PHONY: all check-ep test checkpatch dkms-install dkms-uninstall clean

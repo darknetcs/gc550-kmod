@@ -3,6 +3,25 @@
 Work in progress. See [DESIGN.md](DESIGN.md) for the design, the safety rules and the
 bring-up plan. **The module builds, but has not been loaded or run on hardware yet.**
 
+## Installing (DKMS)
+
+Needs DKMS and the headers for your kernel (`sudo apt install dkms linux-headers-$(uname -r)`
+on Ubuntu). Then:
+
+```
+sudo make dkms-install
+```
+
+DKMS builds the driver, signs it with the machine's MOK if Secure Boot is on
+(Ubuntu's DKMS does this by itself), rebuilds it for every new kernel, and the kernel
+loads it automatically whenever the card is plugged in. Unplug and replug the card
+after installing.
+
+- Check: `dkms status gc550` and `modinfo gc550 | grep -E 'filename|signer'`
+- Remove: `sudo make dkms-uninstall`
+- While the driver is bound to the card, userspace tools such as lgx2userspace cannot
+  open it. To use one, run `sudo modprobe -r gc550` first.
+
 ## Building
 
 ```
