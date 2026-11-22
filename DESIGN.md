@@ -1,7 +1,9 @@
-# GC550 kernel driver — design (draft for approval)
+# GC550 kernel driver — design
 
-Status: **design only, nothing built or loaded.** Every step that touches the card has
-an explicit gate (see "Bring-up plan") that needs the owner's OK.
+Status (2026-11-22): **implemented and working.** All bring-up gates passed on the
+author's card. It captures 1080p60 video and audio in OBS on Linux, and the card still
+works with the official Windows driver afterwards. It's installed via DKMS. See
+"Results" at the end.
 
 ## Goals
 
@@ -143,15 +145,24 @@ It's only relevant to the passthrough output, which the bootstrap already sets u
 
 ## Lifecycle
 
-1. **probe:** check the endpoints, allocate, guard-check the bootstrap table, then queue the
-   bootstrap on a workqueue so that `probe()` returns quickly. If it was already bootstrapped
-   (for example after an rmmod/insmod without a replug), skip it and resync the stream
-   without alignment, the same as the userspace `alignToFrameStart=false` path.
+1. **probe:** check the endpoints and allocate. Nothing is sent. Then queue the bootstrap
+   on `system_long_wq`, unless `bootstrap=0`. The bootstrap:
+   - guard-checks the whole table;
+   - drains IN 0x81;
+   - reads the board state (ADV7604 IO `0xFA` == `0x6C` and PCA9539A `06/07` == `00 09`
+     mean "configured": reuse it and don't replay);
+   - when the state can't be read, as on a freshly powered card, which doesn't answer I2C
+     reads before its bootstrap, does a 100 ms read-only probe of IN 0x83. No data means
+     fresh: replay. Data means configured but unreadable: refuse and ask for a replug.
+     This is the same fallback lgx2userspace uses.
+   The parser resyncs on the next SAV, so no frame-boundary alignment probe is needed.
 2. **bootstrap done:** register the video device and the sound card. Start the status poll.
 3. **STREAMON / PCM trigger:** start the URBs on the first user and stop them after the last
    one leaves. Video and audio share the stream.
-4. **disconnect:** kill the anchored URBs, `vb2_queue_error`, `video_unregister_device`,
-   `snd_card_disconnect`, and free everything on the last reference.
+4. **disconnect:** cancel the bootstrap and the status poll, mark the bridge
+   disconnected, kill the anchored URBs, `vb2_video_unregister_device`, and
+   `snd_card_disconnect` + `snd_card_free_when_closed`. The device struct is freed on
+   the last kref (probe, the V4L2 release and the ALSA private_free each hold one).
 
 The kernel driver claims the interface, so lgx2userspace can't open the card while
 `gc550.ko` is bound, and the two can't fight over it. `v4l2loopback` isn't involved
@@ -193,7 +204,7 @@ The recording is 6576 raw transactions. A reviewer will ask what it does, and so
    byte-for-byte the same writes, in the same order, as the trimmed recording. The cleanup
    can't silently change what the card receives.
 
-## Bring-up plan (each ★ gate needs your OK before I ask you to run it)
+## Bring-up plan (each ★ gate needed the owner's OK) — all done
 
 | # | Step | Touches the card? |
 |---|---|---|
@@ -211,13 +222,28 @@ Optional for step 0: record a raw stream dump with the existing userspace build
 (`LGX2_DUMP_FILE=…`). That lets the kernel parser be tested offline against real data. It's the
 same proven userspace path you've already run.
 
-## Open questions
+## Results (2026-11-22, on a GC550 with bcdDevice 2.07, Ubuntu 7.3.0-11, Secure Boot on)
 
-- **Frame rate:** fixed 60 fps, or follow the source? The status registers give the input timing,
-  but the FPGA may always output 60. This will be measured at step 5.
-- **The lone `08` command:** its meaning is unknown, but it's harmless (the Windows driver sends it too)
-  and it's kept exactly as recorded.
-- **URB size:** will the 2 MiB SG URBs behave identically to libusb's? This will be checked at step 5,
-  with smaller URBs as the fallback.
-- **Re-bootstrap detection:** what's the most reliable cheap "already initialised?" read? A candidate is
-  an FPGA `0x10` register the recording sets, to be picked at step 4.
+| Gate | Result |
+|---|---|
+| 2 load / unload | The kmodsign-signed module loads and unloads cleanly |
+| 3 `bootstrap=0` | Binds on insmod and on hotplug, unbinds cleanly on rmmod and on unplug; nothing sent |
+| 4 bootstrap | First try stopped safely ("board state unknown": a fresh card ignores I2C reads), fixed with the IN 0x83 fallback. Then 6576 commands in about 3 s, `/dev/videoN` and the ALSA card registered, HDMI status and cable replug reported |
+| 5 video | steady 60.00 fps; 1918 frames with 0 drops, 0 bad spans, 0 desyncs |
+| 6 audio | arecord clean; video and audio share the stream; OBS works via V4L2 and PulseAudio/PipeWire |
+| 7 Windows | Windows 10 + official driver + OBS work afterwards |
+| DKMS | Installs, is signed with the machine's MOK automatically, autoloads on plug-in |
+| v4l2-compliance 1.32.0 | 48/48 without streaming, 57/57 with `-s 120` (read, MMAP with REQBUFS/CREATE_BUFS, no-poll/select/epoll); 0 failures, 0 warnings. DMABUF untested (needs `--expbuf-device`) |
+
+Answered questions:
+- **Frame rate:** the card delivers a steady 60 fps. The input status reports the source
+  timing (for example "1920x1080p @ 59.89 Hz"; the pixel-clock register has 0.25 MHz resolution).
+- **URB size:** 4 × 0x1FC000 scatter-gather URBs built from 64 KiB chunks work as well
+  as libusb's.
+- **Re-bootstrap detection:** IO `0xFA` / PCA9539A `06–07` as in lgx2userspace, plus the
+  IN 0x83 fallback for fresh cards.
+
+Still open:
+- **The lone `08` command:** its meaning is unknown. It's harmless (Windows sends it) and kept as recorded.
+- **Trimming the steady-state loop** (#1766+): deferred, needs its own Linux and Windows gates.
+- **The in-tree `adv7604` subdevice** (DV timings, EDID control): a possible v2.

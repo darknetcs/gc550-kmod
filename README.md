@@ -1,7 +1,10 @@
 # gc550 — Linux driver for the AVerMedia Live Gamer Extreme (GC550)
 
 Work in progress. See [DESIGN.md](DESIGN.md) for the design, the safety rules and the
-bring-up plan. **The module builds, but has not been loaded or run on hardware yet.**
+bring-up plan and test results. **Working:** 1080p60 video and HDMI audio on Linux (V4L2 and
+ALSA, so OBS, ffmpeg and browsers just see a webcam and a sound card), with the card still
+working on Windows afterwards. Tested on one GC550 (bcdDevice 2.07) under Ubuntu's 7.3 kernel
+with Secure Boot on. Only the GC550 (`07ca:4710`) is supported; the GC551/LGX2 is not.
 
 ## Installing (DKMS)
 
@@ -18,6 +21,8 @@ loads it automatically whenever the card is plugged in. Unplug and replug the ca
 after installing.
 
 - Check: `dkms status gc550` and `modinfo gc550 | grep -E 'filename|signer'`
+- Upgrade: pull the new sources and run `sudo make dkms-install` again; older versions
+  are removed first.
 - Remove: `sudo make dkms-uninstall`
 - While the driver is bound to the card, userspace tools such as lgx2userspace cannot
   open it. To use one, run `sudo modprobe -r gc550` first.

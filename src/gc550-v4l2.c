@@ -82,6 +82,20 @@ void gc550_video_frame_done(struct gc550_dev *dev, size_t bytes)
 	vb2_buffer_done(&buf->vb.vb2_buf, VB2_BUF_STATE_DONE);
 }
 
+/*
+ * The application had no buffer queued for a complete frame. Count it, and
+ * advance the sequence number so the application can see the gap.
+ * Frames that arrive while video is not streaming are not drops.
+ */
+void gc550_video_frame_dropped(struct gc550_dev *dev)
+{
+	lockdep_assert_held(&dev->parse_lock);
+	if (!dev->video_on)
+		return;
+	dev->video_dropped++;
+	dev->sequence++;
+}
+
 /* Take back the buffer the parser holds (STREAMOFF). */
 void gc550_video_release_buffer(struct gc550_dev *dev)
 {
@@ -280,13 +294,15 @@ static int gc550_log_status(struct file *file, void *priv)
 {
 	struct gc550_dev *dev = video_drvdata(file);
 	struct gc550_parser_stats st;
+	u64 dropped;
 
 	mutex_lock(&dev->parse_lock);
 	st = dev->parser.stats;
+	dropped = dev->video_dropped;
 	mutex_unlock(&dev->parse_lock);
 	v4l2_info(&dev->v4l2_dev,
-		  "frames %llu, dropped %llu, bad spans %u, desyncs %u, audio packets %llu\n",
-		  st.frames, st.frames_dropped, st.bad_spans, st.desyncs, st.audio_packets);
+		  "frames delivered %llu, dropped (no free buffer) %llu, bad spans %u, desyncs %u, audio packets %llu\n",
+		  st.frames, dropped, st.bad_spans, st.desyncs, st.audio_packets);
 	return 0;
 }
 

@@ -77,7 +77,6 @@ struct gc550_dev {
 
 	/* bootstrap and registration, on system_wq */
 	struct work_struct boot_work;
-	bool booted;
 	bool v4l2_registered;
 	bool snd_registered;
 
@@ -114,6 +113,7 @@ struct gc550_dev {
 	struct gc550_buffer *cur;	/* held by the parser; under parse_lock */
 	bool video_on;			/* under parse_lock */
 	u32 sequence;
+	u64 video_dropped;		/* while streaming, for want of a buffer */
 
 	/* ALSA */
 	struct snd_card *card;
@@ -159,6 +159,7 @@ void gc550_v4l2_unregister(struct gc550_dev *dev);
 void gc550_v4l2_source_change(struct gc550_dev *dev);
 u8 *gc550_video_frame_buffer(struct gc550_dev *dev, size_t *capacity);
 void gc550_video_frame_done(struct gc550_dev *dev, size_t bytes);
+void gc550_video_frame_dropped(struct gc550_dev *dev);
 void gc550_video_release_buffer(struct gc550_dev *dev);
 
 /* gc550-alsa.c */

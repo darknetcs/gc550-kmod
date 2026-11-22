@@ -43,6 +43,14 @@ static void sink_frame_done(void *priv, size_t bytes)
 	s->lens[s->nframes++] = bytes;
 }
 
+static int sink_dropped;
+
+static void sink_frame_dropped(void *priv)
+{
+	(void)priv;
+	sink_dropped++;
+}
+
 static void sink_audio(void *priv, const u8 *data, size_t len)
 {
 	struct sink *s = priv;
@@ -58,6 +66,7 @@ static void sink_audio(void *priv, const u8 *data, size_t len)
 static const struct gc550_parser_ops sink_ops = {
 	.frame_buffer = sink_frame_buffer,
 	.frame_done = sink_frame_done,
+	.frame_dropped = sink_frame_dropped,
 	.audio = sink_audio,
 };
 
@@ -192,10 +201,12 @@ static void test_wrong_sizes_and_drops(void)
 	/* no buffer available: counted, nothing delivered */
 	sink_init(&s);
 	s.refuse = 1;
+	sink_dropped = 0;
 	gc550_parser_init(&p, &sink_ops, &s);
 	feed_split(&p, basic.buf, basic.len, 65536, 0);
 	CHECK(s.nframes == 0);
 	CHECK(p.stats.frames_dropped == BASIC_FRAMES);
+	CHECK(sink_dropped == BASIC_FRAMES);
 	CHECK(s.audio_len == 3841);	/* audio unaffected */
 	free(s.audio);
 	sg_free(&g);

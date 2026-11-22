@@ -37,6 +37,8 @@ struct gc550_parser_ops {
 	u8 *(*frame_buffer)(void *priv, size_t *capacity);
 	/* The held buffer now contains a complete frame of @bytes. */
 	void (*frame_done)(void *priv, size_t bytes);
+	/* Optional: a complete frame arrived while no buffer was held. */
+	void (*frame_dropped)(void *priv);
 	/* Audio payload bytes, in order; packet boundaries are not reported. */
 	void (*audio)(void *priv, const u8 *data, size_t len);
 };

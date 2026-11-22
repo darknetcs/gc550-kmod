@@ -49,7 +49,7 @@ void audio(void *priv, const u8 *data, size_t len)
 	c->audio.insert(c->audio.end(), data, data + len);
 }
 
-const gc550_parser_ops ops = { frameBuffer, frameDone, audio };
+const gc550_parser_ops ops = { frameBuffer, frameDone, nullptr, audio };
 
 void build(struct sg *g)
 {

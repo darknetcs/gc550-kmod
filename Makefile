@@ -29,24 +29,31 @@ test:
 checkpatch:
 	perl $(KDIR)/scripts/checkpatch.pl --no-tree --strict --terse -f src/*.[ch]
 
+# Versions of gc550 that DKMS knows about, e.g. "0.1.0 0.1.1".
+DKMS_VERSIONS = $$(dkms status -m gc550 2>/dev/null | sed -n 's|^gc550/\([^,]*\),.*|\1|p' | sort -u)
+
 # Copies sources only; the build itself runs under DKMS, never in this tree.
+# Any older installed version is removed first, so this also upgrades.
 dkms-install:
 	@test "$$(id -u)" = 0 || { echo "run as: sudo make dkms-install"; exit 1; }
 	tools/check-ep-cmd.sh
-	@if dkms status -m gc550 -v $(VERSION) | grep -q .; then \
-		echo "gc550/$(VERSION) is already added; run 'sudo make dkms-uninstall' first"; exit 1; fi
+	@for v in $(DKMS_VERSIONS); do \
+		echo "removing installed gc550/$$v"; \
+		dkms remove -m gc550 -v $$v --all && rm -rf /usr/src/gc550-$$v || exit 1; \
+	done
 	rm -rf $(DKMS_SRC)
 	for f in $(DKMS_FILES); do install -D -m 644 $$f $(DKMS_SRC)/$$f; done
 	chmod 755 $(DKMS_SRC)/tools/check-ep-cmd.sh
 	dkms add -m gc550 -v $(VERSION)
 	dkms install -m gc550 -v $(VERSION)
-	@echo "Installed. Unplug and replug the GC550 to load the driver."
+	@echo "Installed gc550/$(VERSION). Unplug and replug the GC550 to load it."
 
 dkms-uninstall:
 	@test "$$(id -u)" = 0 || { echo "run as: sudo make dkms-uninstall"; exit 1; }
 	-modprobe -r gc550
-	-dkms remove -m gc550 -v $(VERSION) --all
-	rm -rf $(DKMS_SRC)
+	@for v in $(DKMS_VERSIONS); do \
+		dkms remove -m gc550 -v $$v --all; rm -rf /usr/src/gc550-$$v; \
+	done
 
 clean:
 	$(MAKE) -C $(KDIR) M=$(CURDIR) clean

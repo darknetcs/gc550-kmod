@@ -22,6 +22,11 @@ static void gc550_cb_frame_done(void *priv, size_t bytes)
 	gc550_video_frame_done(priv, bytes);
 }
 
+static void gc550_cb_frame_dropped(void *priv)
+{
+	gc550_video_frame_dropped(priv);
+}
+
 static void gc550_cb_audio(void *priv, const u8 *data, size_t len)
 {
 	gc550_audio_data(priv, data, len);
@@ -30,6 +35,7 @@ static void gc550_cb_audio(void *priv, const u8 *data, size_t len)
 static const struct gc550_parser_ops gc550_parser_ops = {
 	.frame_buffer = gc550_cb_frame_buffer,
 	.frame_done = gc550_cb_frame_done,
+	.frame_dropped = gc550_cb_frame_dropped,
 	.audio = gc550_cb_audio,
 };
 

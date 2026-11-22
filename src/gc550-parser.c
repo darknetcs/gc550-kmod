@@ -113,6 +113,8 @@ static void gc550_eav(struct gc550_parser *p)
 	}
 	if (!p->dst) {
 		p->stats.frames_dropped++;
+		if (p->ops->frame_dropped)
+			p->ops->frame_dropped(p->priv);
 		return;
 	}
 	p->stats.frames++;

@@ -53,7 +53,6 @@ static void gc550_boot_work(struct work_struct *work)
 		dev_err(&dev->intf->dev, "bootstrap failed (%d); replug the card to retry\n", ret);
 		return;
 	}
-	dev->booted = true;
 
 	ret = gc550_v4l2_register(dev);
 	if (ret)
