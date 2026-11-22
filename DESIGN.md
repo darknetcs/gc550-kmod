@@ -170,13 +170,12 @@ and can stay installed.
 
 ## Secure Boot
 
-- The machine has Secure Boot on (lockdown) and an enrolled MOK, `CN=<machine> Secure Boot Module Signature key`,
-  with its key pair in `/var/lib/shim-signed/mok/`. The private key is readable only by root.
+- With Secure Boot on (lockdown), only signed modules load. Ubuntu keeps the machine's
+  MOK key pair in `/var/lib/shim-signed/mok/`. The private key is readable only by root.
 - **Release:** ship as a DKMS package (`dkms.conf`, `/usr/src/gc550-<ver>`). Ubuntu's DKMS
-  signs with that MOK on install and on every kernel update. No new key, no MOK
-  enrollment screen, Secure Boot stays on.
-- **Development:** I build as your user with `make -C /lib/modules/$(uname -r)/build M=$PWD`. You sign and load
-  in your own terminal:
+  signs with that MOK on install and on every kernel update. On a machine whose MOK is
+  already enrolled there is no new key, no MOK enrollment screen, and Secure Boot stays on.
+- **Development:** build as a normal user with `make`, then sign and load as root:
   ```
   sudo kmodsign sha512 /var/lib/shim-signed/mok/MOK.priv /var/lib/shim-signed/mok/MOK.der gc550.ko
   sudo insmod gc550.ko
@@ -204,7 +203,9 @@ The recording is 6576 raw transactions. A reviewer will ask what it does, and so
    byte-for-byte the same writes, in the same order, as the trimmed recording. The cleanup
    can't silently change what the card receives.
 
-## Bring-up plan (each ★ gate needed the owner's OK) — all done
+## Bring-up plan — all done
+
+Each ★ gate was run only after the previous one passed, and only with the card owner's go-ahead.
 
 | # | Step | Touches the card? |
 |---|---|---|
@@ -218,9 +219,8 @@ The recording is 6576 raw transactions. A reviewer will ask what it does, and so
 | 7 ★ | Unplug and test on Windows again | — |
 | 8 | DKMS package, then optionally upstream / share | — |
 
-Optional for step 0: record a raw stream dump with the existing userspace build
-(`LGX2_DUMP_FILE=…`). That lets the kernel parser be tested offline against real data. It's the
-same proven userspace path you've already run.
+Optional for step 0: record a raw stream dump with the lgx2userspace build
+(`LGX2_DUMP_FILE=…`). That lets the kernel parser be tested offline against real data.
 
 ## Results (2026-11-22, on a GC550 with bcdDevice 2.07, Ubuntu 7.3.0-11, Secure Boot on)
 

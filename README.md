@@ -1,10 +1,25 @@
 # gc550 — Linux driver for the AVerMedia Live Gamer Extreme (GC550)
 
-Work in progress. See [DESIGN.md](DESIGN.md) for the design, the safety rules and the
+Work in progress. See [DESIGN.md](DESIGN.md) for the design, the safety rules, the
 bring-up plan and test results. **Working:** 1080p60 video and HDMI audio on Linux (V4L2 and
 ALSA, so OBS, ffmpeg and browsers just see a webcam and a sound card), with the card still
 working on Windows afterwards. Tested on one GC550 (bcdDevice 2.07) under Ubuntu's 7.3 kernel
 with Secure Boot on. Only the GC550 (`07ca:4710`) is supported; the GC551/LGX2 is not.
+
+## Read this first
+
+- **Unofficial.** This project is not affiliated with or supported by AVerMedia. It was
+  written from protocol knowledge gathered by [lgx2userspace](https://github.com/ChrisAJS/lgx2userspace).
+- **Why the card stays safe on Windows.** Old lgx2userspace builds (before upstream commit
+  f150158) replayed a recorded login to the card's anti-clone chip. It always failed and, after a
+  few runs, locked the chip for good, and the official Windows driver then refused the card. This
+  driver never sends that login. Every command it sends goes through an allow-list
+  (`src/gc550-guard.c`) that refuses all anti-clone-chip, config-memory and unknown commands, and the
+  build fails if any other code could send to the card (`tools/check-ep-cmd.sh`).
+- **Tested on one card** (GC550, bcdDevice 2.07). After using this driver, that card still
+  worked with the official driver and OBS on Windows 10. That is one data point, not a guarantee.
+  **Use at your own risk.** If your card's chip was already locked by an old lgx2userspace
+  build, nothing can unlock it.
 
 ## Installing (DKMS)
 
