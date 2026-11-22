@@ -7,6 +7,7 @@
  * corrections lgx2userspace makes for sources other than the one recorded.
  */
 #include <linux/slab.h>
+#include <linux/usb.h>
 
 #include "gc550.h"
 #include "gc550-bootstrap.h"
@@ -27,10 +28,18 @@ enum gc550_board_state {
 static enum gc550_board_state gc550_board_state(struct gc550_dev *dev)
 {
 	u8 edid_map = 0, pca[2] = { 0, 0 };
+	int ret;
 
-	if (gc550_i2c_read(dev, GC550_ADV_IO, 0xFA, &edid_map, 1) ||
-	    gc550_i2c_read(dev, GC550_PCA9539A, 0x06, pca, sizeof(pca)))
+	ret = gc550_i2c_read(dev, GC550_ADV_IO, 0xFA, &edid_map, 1);
+	if (ret) {
+		dev_info(&dev->intf->dev, "board state: ADV7604 IO 0xFA read failed (%d)\n", ret);
 		return GC550_BOARD_UNKNOWN;
+	}
+	ret = gc550_i2c_read(dev, GC550_PCA9539A, 0x06, pca, sizeof(pca));
+	if (ret) {
+		dev_info(&dev->intf->dev, "board state: PCA9539A 0x06 read failed (%d)\n", ret);
+		return GC550_BOARD_UNKNOWN;
+	}
 	if (edid_map != 0x6C)
 		return GC550_BOARD_FRESH;
 	if (pca[0] == 0x00 && pca[1] == 0x09)
@@ -39,6 +48,34 @@ static enum gc550_board_state gc550_board_state(struct gc550_dev *dev)
 		 "unrecognised board state (EDID map %02x, PCA9539A %02x %02x)\n",
 		 edid_map, pca[0], pca[1]);
 	return GC550_BOARD_UNKNOWN;
+}
+
+/*
+ * A freshly powered card does not answer register reads until it has been
+ * bootstrapped, so an unreadable state is told apart the way lgx2userspace
+ * does: a bootstrapped card streams video on IN 0x83 straight away, a fresh
+ * one sends nothing. This only reads; nothing is sent to the card.
+ * Returns 1 if video is flowing, 0 if not, or a negative error.
+ */
+#define GC550_PROBE_BYTES	(64 * 1024)
+#define GC550_PROBE_TIMEOUT_MS	100
+
+static int gc550_video_flowing(struct gc550_dev *dev)
+{
+	int actual = 0, ret;
+	u8 *buf;
+
+	buf = kmalloc(GC550_PROBE_BYTES, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
+	ret = usb_bulk_msg(dev->udev, usb_rcvbulkpipe(dev->udev, GC550_EP_STREAM_IN),
+			   buf, GC550_PROBE_BYTES, &actual, GC550_PROBE_TIMEOUT_MS);
+	kfree(buf);
+	if (ret == -ETIMEDOUT && !actual)
+		return 0;
+	if (ret && ret != -ETIMEDOUT)
+		return ret;
+	return 1;
 }
 
 static int gc550_replay(struct gc550_dev *dev)
@@ -113,6 +150,7 @@ int gc550_boot(struct gc550_dev *dev)
 {
 	struct device *d = &dev->intf->dev;
 	enum gc550_guard_verdict verdict;
+	enum gc550_board_state state;
 	unsigned int bad;
 	int ret;
 
@@ -125,21 +163,32 @@ int gc550_boot(struct gc550_dev *dev)
 	}
 
 	gc550_bridge_drain(dev);
-	switch (gc550_board_state(dev)) {
-	case GC550_BOARD_CONFIGURED:
+	state = gc550_board_state(dev);
+	if (state == GC550_BOARD_UNKNOWN) {
+		ret = gc550_video_flowing(dev);
+		if (ret < 0) {
+			dev_err(d, "stream check failed (%d); unplug and replug the card\n", ret);
+			return ret;
+		}
+		if (ret) {
+			dev_err(d, "card is streaming but its state is unreadable; unplug and replug it\n");
+			return -EIO;
+		}
+		dev_info(d, "no video flowing: treating the card as fresh\n");
+		state = GC550_BOARD_FRESH;
+	}
+
+	if (state == GC550_BOARD_CONFIGURED) {
 		dev_info(d, "already configured, reusing its configuration\n");
-		break;
-	case GC550_BOARD_FRESH:
+	} else {
+		/* a late reply to a timed-out state read must not be taken as an answer */
+		gc550_bridge_drain(dev);
 		dev_info(d, "bootstrapping (%u commands)\n", gc550_bootstrap_count);
 		ret = gc550_replay(dev);
 		if (ret)
 			return ret;
 		gc550_bridge_drain(dev);
 		dev_info(d, "bootstrap complete\n");
-		break;
-	default:
-		dev_err(d, "board state unknown; unplug and replug the card\n");
-		return -EIO;
 	}
 
 	gc550_auto_colour_space(dev);
